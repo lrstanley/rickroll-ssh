@@ -1,6 +1,10 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"io"
@@ -21,6 +25,10 @@ func setWinsize(f *os.File, w, h int) {
 func main() {
 	bind := flag.String("bind", ":2020", "host:port bind combination")
 	flag.Parse()
+
+	if err := genKey("id_rsa"); err != nil {
+		log.Fatalf("error while generating ssh key: %s", err)
+	}
 
 	ssh.Handle(func(s ssh.Session) {
 		log.Printf("new connection from %v", s.RemoteAddr())
@@ -66,7 +74,6 @@ func main() {
 						// roll.sh *should* run a "reset".
 						f.Write([]byte{0x3})
 
-						// s.Exit(1)
 						return
 					}
 				}
@@ -77,5 +84,29 @@ func main() {
 	})
 
 	log.Printf("starting ssh server on %v...", *bind)
-	log.Fatal(ssh.ListenAndServe(*bind, nil))
+	log.Fatalf("error starting ssh server: %s", ssh.ListenAndServe(*bind, nil, ssh.HostKeyFile("id_rsa")))
+}
+
+func genKey(privKeyPath string) error {
+	if _, err := os.Stat(privKeyPath); !os.IsNotExist(err) {
+		return err
+	}
+
+	priv, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		return err
+	}
+
+	privKeyFile, err := os.Create(privKeyPath)
+	if err != nil {
+		return err
+	}
+	defer privKeyFile.Close()
+
+	privKeyPEM := &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)}
+	if err = pem.Encode(privKeyFile, privKeyPEM); err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -2,3 +2,6 @@ rickroll
 rickroll-ssh
 *.log
 ~*
+id_rsa*
+*.key
+*.pub
